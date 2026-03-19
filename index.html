@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PianoMaR — Virtual Piano</title>
+    <meta name="description" content="Play piano using your PC keyboard. A beautiful virtual piano with realistic sounds, 5 octaves, transpose, and sustain pedal.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+</head>
+<body>
+    <div class="app">
+        <!-- Fire particles background -->
+        <div class="bg-particles" id="bgParticles"></div>
+        <div class="bg-gradient"></div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <h2>🎹 Loading Piano Samples...</h2>
+                <p class="loading-instrument" id="loadingInstrument">acoustic_grand_piano</p>
+                <p class="loading-hint">Click anywhere to start</p>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🔥</span>
+                <h1>Piano<span class="logo-accent">MaR</span></h1>
+                <span class="logo-icon">🎹</span>
+            </div>
+            <p class="tagline">Play with your keyboard • Shift = Sharp notes • Real piano samples 🔥</p>
+        </header>
+
+        <!-- Now Playing Display -->
+        <div class="now-playing">
+            <div class="now-playing-note" id="currentNote">
+                <span class="note-name" id="noteName">—</span>
+                <span class="note-octave" id="noteOctave"></span>
+            </div>
+            <div class="now-playing-history" id="noteHistory">
+                <span class="history-placeholder">Press any key to play...</span>
+            </div>
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+            <div class="control-group">
+                <button id="sustainBtn" class="btn btn-toggle" title="Toggle Sustain (Space)">
+                    <span class="toggle-indicator" id="sustainIndicator">OFF</span>
+                    <span class="control-label">SUSTAIN</span>
+                </button>
+            </div>
+            <div class="control-group transpose-group">
+                <button id="transposeDown" class="btn btn-sm" title="Transpose Down">−</button>
+                <div class="transpose-display">
+                    <span class="transpose-value" id="transposeValue">0</span>
+                    <span class="control-label">TRANSPOSE</span>
+                </div>
+                <button id="transposeUp" class="btn btn-sm" title="Transpose Up">+</button>
+            </div>
+            <div class="control-group">
+                <div class="volume-control">
+                    <span class="vol-icon">🔈</span>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="75" class="slider">
+                    <span class="vol-icon">🔊</span>
+                </div>
+                <span class="control-label">VOLUME</span>
+            </div>
+            <div class="control-group">
+                <select id="instrumentSelect" class="select-control">
+                    <option value="acoustic_grand_piano">🎹 GRAND PIANO</option>
+                    <option value="bright_acoustic_piano">✨ BRIGHT PIANO</option>
+                    <option value="electric_grand_piano">⚡ ELECTRIC PIANO</option>
+                    <option value="honkytonk_piano">🤠 HONKY-TONK</option>
+                    <option value="electric_piano_1">🎛️ ELECTRIC PIANO 2</option>
+                    <option value="harpsichord">🏛️ HARPSICHORD</option>
+                    <option value="clavinet">🎸 CLAVINET</option>
+                    <option value="church_organ">⛪ CHURCH ORGAN</option>
+                    <option value="reed_organ">🎵 REED ORGAN</option>
+                    <option value="music_box">🎁 MUSIC BOX</option>
+                    <option value="marimba">🥁 MARIMBA</option>
+                    <option value="xylophone">🔔 XYLOPHONE</option>
+                    <option value="celesta">❄️ CELESTA</option>
+                    <option value="vibraphone">🎶 VIBRAPHONE</option>
+                    <option value="string_ensemble_1">🎻 STRING ENSEMBLE</option>
+                </select>
+                <span class="control-label">INSTRUMENT</span>
+            </div>
+            <div class="control-group">
+                <button id="showLabelsBtn" class="btn btn-toggle active" title="Show/Hide Labels">
+                    <span class="toggle-indicator" id="labelsIndicator">ON</span>
+                    <span class="control-label">LABELS</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Piano Container -->
+        <div class="piano-wrapper">
+            <div class="piano-body">
+                <div class="piano-keys" id="pianoKeys">
+                    <!-- Keys generated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Keyboard Guide -->
+        <div class="keyboard-guide">
+            <h3>⌨️ KEYBOARD MAPPING</h3>
+            <div class="guide-content">
+                <div class="guide-row">
+                    <span class="guide-label">White Keys</span>
+                    <div class="guide-keys">
+                        <span class="guide-row-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd><kbd>6</kbd><kbd>7</kbd><kbd>8</kbd><kbd>9</kbd><kbd>0</kbd></span>
+                        <span class="guide-row-keys"><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd><kbd>I</kbd><kbd>O</kbd><kbd>P</kbd></span>
+                        <span class="guide-row-keys"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span>
+                        <span class="guide-row-keys"><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd><kbd>V</kbd><kbd>B</kbd><kbd>N</kbd><kbd>M</kbd></span>
+                    </div>
+                </div>
+                <div class="guide-row">
+                    <span class="guide-label">Black Keys</span>
+                    <span class="guide-desc">Hold <kbd>Shift</kbd> + same key</span>
+                </div>
+                <div class="guide-row">
+                    <span class="guide-label">Sustain</span>
+                    <span class="guide-desc"><kbd>Space</kbd></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Built with 🔥 and Web Audio API • Real Soundfont Samples • Use headphones for the best experience 🎧</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+    <script src="audio-engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
