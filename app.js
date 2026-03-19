@@ -253,13 +253,16 @@
 
         activeNotes.delete(baseMidi);
 
+        // Always remove visual highlight on release (audio may sustain)
+        const el = document.getElementById(`key-${baseMidi}`);
+        if (el) el.classList.remove('active');
+
         if (sustain) {
+            // Audio keeps playing, just track it
             sustainedNotes.add(baseMidi);
             audioEngine.stopNote(midi);
         } else {
             audioEngine.stopNote(midi);
-            const el = document.getElementById(`key-${baseMidi}`);
-            if (el) el.classList.remove('active');
         }
     }
 
@@ -342,12 +345,7 @@
         sustainIndicator.textContent = sustain ? 'ON' : 'OFF';
 
         if (!sustain) {
-            for (const baseMidi of sustainedNotes) {
-                const midi = baseMidi + transpose;
-                audioEngine.stopNote(midi);
-                const el = document.getElementById(`key-${baseMidi}`);
-                if (el) el.classList.remove('active');
-            }
+            // Audio engine's setSustain(false) already stops sustained sounds
             sustainedNotes.clear();
         }
     }
