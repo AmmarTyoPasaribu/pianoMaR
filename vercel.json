@@ -7,9 +7,21 @@
     ],
     "headers": [
         {
-            "source": "/(.*)",
+            "source": "/app.js",
             "headers": [
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
+            ]
+        },
+        {
+            "source": "/audio-engine.js",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
+            ]
+        },
+        {
+            "source": "/style.css",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
             ]
         },
         {

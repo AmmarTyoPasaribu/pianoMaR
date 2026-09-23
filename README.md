@@ -9,14 +9,15 @@ A beautiful virtual piano web app with **real piano samples**, playable using yo
 ## ✨ Features
 
 - 🎹 **5 Octaves** (C2–C7) — 61 keys (36 white + 25 black)
-- 🎵 **Real Piano Samples** — Soundfont-based audio from MusyngKite
+- 🎵 **Real Piano Samples** — Grand Piano uses real Salamander Grand Piano (Yamaha C5) recordings; the other 14 instruments use MusyngKite soundfonts
 - ⌨️ **Full Keyboard Mapping** — `1234567890`, `qwertyuiop`, `asdfghjkl`, `zxcvbnm`
 - 🎼 **Shift = Sharp/Black Keys** — Hold Shift + key for sharps
 - 🔄 **Transpose** — ±12 semitones
 - 🦶 **Sustain Pedal** — Space key
 - 🎛️ **15 Instruments** — Grand Piano, Electric Piano, Organ, Music Box, and more
+- 🎨 **Visualizer Mode** — toggle button (top-right, or `Esc`) clears the controls and shows colored trails rising from each key as you play
 - 🔥 **Fire Red Theme** — Animated ember particles and glow effects
-- 📱 **Responsive** — Works on desktop, tablet, and mobile
+- 📱 **Responsive** — Works on desktop, tablet, and mobile (touch glissando supported)
 
 ## 🎮 How to Play
 

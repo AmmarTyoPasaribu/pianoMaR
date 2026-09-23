@@ -26,7 +26,7 @@
     
     --text-primary: #fff0e8;
     --text-secondary: #cc9080;
-    --text-muted: #804030;
+    --text-muted: #c48068; /* WCAG AA vs --bg-card (~6:1); previous #804030 read ~2.5:1 */
     --text-fire: #ff6b35;
     
     --white-key-bg: linear-gradient(180deg, #fff 0%, #f5f0ee 50%, #ecddd5 100%);
@@ -51,6 +51,9 @@
     --transition-fast: 80ms ease;
     --transition-normal: 0.2s ease;
     --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+    --key-white-width: 30px;
+    --key-black-width: 20px;
 }
 
 /* Reset */
@@ -118,6 +121,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     min-height: 100vh;
     padding: 16px 20px;
     gap: 16px;
@@ -403,6 +407,174 @@ body {
     background: var(--bg-secondary);
 }
 
+/* ---- Note Trail Visualizer ---- */
+.visualizer-stage {
+    position: relative;
+    height: 0;
+    overflow: hidden;
+    transition: height 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app.visualizer-mode .visualizer-stage {
+    height: min(46vh, 420px);
+    margin-bottom: 6px;
+}
+
+.visualizer-track {
+    display: flex;
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-50%);
+}
+
+.vis-slot {
+    position: relative;
+    height: 100%;
+}
+
+.vis-slot-white {
+    width: var(--key-white-width);
+    margin: 0 0.5px;
+}
+
+.vis-slot-black {
+    width: var(--key-black-width);
+    position: absolute;
+    top: 0;
+}
+
+.note-trail {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 0;
+    border-radius: 5px 5px 2px 2px;
+    background: linear-gradient(180deg, #fff8f0 0%, var(--fire-orange) 55%, var(--fire-red) 100%);
+    box-shadow: 0 0 14px var(--fire-glow-strong), 0 0 4px rgba(255, 255, 255, 0.5);
+    will-change: height, transform, opacity;
+}
+
+.note-trail.black-note {
+    background: linear-gradient(180deg, #ffd0a0 0%, var(--fire-ember) 55%, var(--fire-deep) 100%);
+}
+
+.note-trail.releasing {
+    /* Keep this in sync with TRAIL_FLOAT_DURATION in app.js (3.2s) */
+    transition: transform 3.2s linear, opacity 1.2s ease-in 2s;
+}
+
+/* ---- Floating Controls (help + visualizer toggle) ---- */
+.float-controls {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1001; /* stay above .loading-overlay (1000) so it's never covered mid-load */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.float-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-normal);
+    backdrop-filter: blur(6px);
+}
+
+.float-btn:hover {
+    border-color: var(--fire-red);
+    color: var(--text-primary);
+}
+
+.float-btn.active {
+    background: linear-gradient(135deg, var(--fire-deep), var(--fire-red));
+    border-color: var(--fire-red);
+    color: white;
+    box-shadow: var(--shadow-fire);
+}
+
+.help-popover {
+    position: fixed;
+    top: 70px;
+    right: 16px;
+    z-index: 1001;
+    width: 230px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px);
+    animation: fadeIn 0.15s ease;
+}
+
+.help-popover[hidden] {
+    display: none;
+}
+
+.help-popover h4 {
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.help-popover ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.help-popover li {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.help-popover li span {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-left: 2px;
+}
+
+.help-popover kbd {
+    height: 20px;
+    min-width: 20px;
+    padding: 0 4px;
+    font-size: 0.58rem;
+}
+
+/* Mode 2: clear the area above the piano for the visualizer */
+.app.visualizer-mode .now-playing,
+.app.visualizer-mode .controls-bar,
+.app.visualizer-mode .footer {
+    display: none;
+}
+
+.app.visualizer-mode .header {
+    padding: 8px 0 2px;
+}
+
+.app.visualizer-mode .tagline {
+    display: none;
+}
+
 /* ---- Piano ---- */
 .piano-wrapper {
     width: 100%;
@@ -450,7 +622,7 @@ body {
 }
 
 .key-white {
-    width: 30px;
+    width: var(--key-white-width);
     height: 180px;
     background: var(--white-key-bg);
     border: 1px solid #c0b0a8;
@@ -479,7 +651,7 @@ body {
 }
 
 .key-black {
-    width: 20px;
+    width: var(--key-black-width);
     height: 115px;
     background: var(--black-key-bg);
     border: 1px solid #000;
@@ -513,21 +685,21 @@ body {
 .key-label {
     font-size: 0.5rem;
     font-weight: 600;
-    color: #999;
+    color: #5a4540; /* ~7.9:1 on the white-key gradient; previous #999 read ~2.5:1 */
     pointer-events: none;
     transition: opacity var(--transition-normal);
     line-height: 1;
 }
 
 .key-black .key-label {
-    color: #666;
+    color: #b0a09a; /* ~7.6:1 on the black-key gradient; previous #666 read ~3.4:1 */
     font-size: 0.45rem;
 }
 
 .key-mapping {
     font-size: 0.65rem;
     font-weight: 800;
-    color: var(--fire-red);
+    color: #a30000; /* ~7.3:1 on the white-key gradient; --fire-red read ~3.3:1 */
     pointer-events: none;
     transition: opacity var(--transition-normal);
     line-height: 1;
@@ -569,67 +741,6 @@ body {
         transform: translateX(-50%) translateY(-60px) scale(0.2);
         box-shadow: 0 0 2px var(--fire-yellow);
     }
-}
-
-/* ---- Keyboard Guide ---- */
-.keyboard-guide {
-    width: 100%;
-    max-width: 600px;
-    padding: 16px 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-md);
-    animation: fadeIn 0.8s ease;
-}
-
-.keyboard-guide h3 {
-    font-family: var(--font-display);
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--text-secondary);
-    margin-bottom: 12px;
-    text-align: center;
-    letter-spacing: 2px;
-}
-
-.guide-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.guide-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.guide-label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-weight: 700;
-    min-width: 80px;
-    letter-spacing: 0.5px;
-    padding-top: 2px;
-}
-
-.guide-keys {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.guide-row-keys {
-    display: flex;
-    gap: 3px;
-}
-
-.guide-desc {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 kbd {
@@ -728,19 +839,25 @@ kbd {
 
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
+    :root { --key-white-width: 22px; --key-black-width: 15px; }
     .app { padding: 10px; gap: 12px; }
     .logo h1 { font-size: 1.8rem; }
+    .header { padding-left: 56px; padding-right: 56px; }
     .now-playing { min-width: 0; width: 100%; }
     .controls-bar { padding: 8px 12px; gap: 10px; }
-    .key-white { width: 22px; height: 150px; }
-    .key-black { width: 15px; height: 95px; }
+    .key-white { height: 150px; }
+    .key-black { height: 95px; }
     .slider { width: 70px; }
-    .keyboard-guide { padding: 12px 14px; }
+    .app.visualizer-mode .visualizer-stage { height: 32vh; }
+    .float-controls { top: 10px; right: 10px; gap: 8px; }
+    .float-btn { width: 38px; height: 38px; }
+    .help-popover { top: 58px; right: 10px; width: 200px; }
 }
 
 @media (max-width: 480px) {
-    .key-white { width: 18px; height: 130px; }
-    .key-black { width: 12px; height: 80px; }
+    :root { --key-white-width: 18px; --key-black-width: 12px; }
+    .key-white { height: 130px; }
+    .key-black { height: 80px; }
     .key-mapping { font-size: 0.5rem; }
     .key-label { display: none; }
 }

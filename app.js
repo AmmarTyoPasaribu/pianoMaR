@@ -14,6 +14,10 @@
     // ==========================================
     // Full Keyboard Mapping (virtualpiano.net style)
     // ==========================================
+    // These maps are the single source of truth for on-screen labels.
+    // Physical-key detection below (CODE_TO_WHITE_MIDI) derives from
+    // WHITE_KEY_MAP so it works regardless of the OS keyboard layout
+    // (e.keyCode/e.key differ across layouts, e.code does not).
 
     const WHITE_KEY_MAP = {
         '1': 36, '2': 38, '3': 40, '4': 41, '5': 43, '6': 45, '7': 47,
@@ -45,6 +49,21 @@
     for (const [k, m] of Object.entries(WHITE_KEY_MAP)) MIDI_TO_WHITE_KEY[m] = k;
     for (const [k, m] of Object.entries(BLACK_KEY_MAP)) MIDI_TO_BLACK_KEY[m] = k;
 
+    // Physical key (KeyboardEvent.code) -> white-key MIDI, derived from WHITE_KEY_MAP
+    // so it stays layout-independent (AZERTY, QWERTZ, etc. all use the same physical
+    // rows/columns). Whether Shift is held decides white vs. the black key above it.
+    const CODE_TO_WHITE_MIDI = {};
+    for (const [ch, midi] of Object.entries(WHITE_KEY_MAP)) {
+        const code = /[0-9]/.test(ch) ? `Digit${ch}` : `Key${ch.toUpperCase()}`;
+        CODE_TO_WHITE_MIDI[code] = midi;
+    }
+
+    function midiToNoteName(midi) {
+        const idx = ((midi % 12) + 12) % 12;
+        const octave = Math.floor(midi / 12) - 1;
+        return { name: NOTE_NAMES[idx], octave };
+    }
+
     // ==========================================
     // State
     // ==========================================
@@ -53,15 +72,20 @@
     let sustain = false;
     let showLabels = true;
     let audioReady = false;
+    let visualizerMode = false;
     const pressedPhysicalKeys = new Map();
+    const activeTouches = new Map(); // touch identifier -> baseMidi
     const activeNotes = new Set();
     const sustainedNotes = new Set();
     const noteHistory = [];
+    const noteTrails = new Map(); // baseMidi -> trail state
+    let trailRafId = null;
 
     // ==========================================
     // DOM
     // ==========================================
 
+    const appEl = document.getElementById('app');
     const pianoKeysContainer = document.getElementById('pianoKeys');
     const noteNameEl = document.getElementById('noteName');
     const noteOctaveEl = document.getElementById('noteOctave');
@@ -78,6 +102,12 @@
     const bgParticles = document.getElementById('bgParticles');
     const loadingOverlay = document.getElementById('loadingOverlay');
     const loadingInstrument = document.getElementById('loadingInstrument');
+    const loadingHint = document.querySelector('.loading-hint');
+    const visualizerToggleBtn = document.getElementById('visualizerToggleBtn');
+    const visualizerTrack = document.getElementById('visualizerTrack');
+    const pianoBody = document.getElementById('pianoBody');
+    const helpToggleBtn = document.getElementById('helpToggleBtn');
+    const helpPopover = document.getElementById('helpPopover');
 
     // ==========================================
     // Audio Engine
@@ -88,46 +118,59 @@
     // Loading callbacks
     audioEngine.onLoadStart = (name) => {
         loadingInstrument.textContent = name.replace(/_/g, ' ');
+        if (loadingHint) loadingHint.textContent = 'Click anywhere to start';
         loadingOverlay.classList.remove('hidden');
     };
     audioEngine.onLoadEnd = (name) => {
-        loadingOverlay.classList.add('hidden');
-        audioReady = true;
+        if (audioEngine.currentInstrument) {
+            loadingOverlay.classList.add('hidden');
+            audioReady = true;
+        }
+    };
+    audioEngine.onLoadError = (name, err) => {
+        loadingInstrument.textContent = 'Failed to load piano samples';
+        if (loadingHint) loadingHint.textContent = 'Check your internet connection, then reload the page.';
+        loadingOverlay.classList.remove('hidden');
+    };
+    audioEngine.onLoadProgress = (name, loaded, total) => {
+        if (loadingHint) loadingHint.textContent = `Loading samples… ${loaded}/${total}`;
     };
 
     async function initAudio() {
         if (audioReady) return;
         try {
             await audioEngine.init();
-            audioReady = true;
+            if (audioEngine.currentInstrument) audioReady = true;
         } catch(e) {
             console.error('Audio init error:', e);
         }
     }
 
     // ==========================================
-    // Piano Rendering
+    // Piano + Visualizer Rendering
     // ==========================================
 
     function generatePiano() {
         pianoKeysContainer.innerHTML = '';
-        const whiteKeyWidth = 31;
+        visualizerTrack.innerHTML = '';
+        clearAllTrails();
 
         WHITE_KEYS_ORDER.forEach((keyChar, idx) => {
             const baseMidi = WHITE_KEY_MAP[keyChar];
             const midi = baseMidi + transpose;
-            const noteIdx = ((midi % 12) + 12) % 12;
-            const octave = Math.floor(midi / 12) - 1;
-            const noteName = NOTE_NAMES[noteIdx];
+            const { name, octave } = midiToNoteName(midi);
 
             const el = document.createElement('div');
             el.className = 'key key-white';
             el.dataset.midi = String(baseMidi);
             el.id = `key-${baseMidi}`;
+            el.setAttribute('role', 'button');
+            el.tabIndex = -1;
+            el.setAttribute('aria-label', `${name}${octave}`);
 
             const label = document.createElement('span');
             label.className = 'key-label';
-            label.textContent = `${noteName}${octave}`;
+            label.textContent = `${name}${octave}`;
             el.appendChild(label);
 
             const mapping = document.createElement('span');
@@ -137,7 +180,27 @@
 
             addKeyEvents(el, baseMidi);
             pianoKeysContainer.appendChild(el);
+
+            const slot = document.createElement('div');
+            slot.className = 'vis-slot vis-slot-white';
+            slot.id = `slot-${baseMidi}`;
+            visualizerTrack.appendChild(slot);
         });
+
+        // Measure actual rendered key sizes (they shrink at mobile breakpoints via CSS)
+        // instead of assuming fixed desktop pixel widths, so black keys stay aligned
+        // with the white key boundaries at every screen size.
+        const firstWhite = pianoKeysContainer.querySelector('.key-white');
+        let whiteKeyPitch = 31;
+        let blackKeyWidth = 20;
+        if (firstWhite) {
+            const whiteStyle = getComputedStyle(firstWhite);
+            whiteKeyPitch = firstWhite.getBoundingClientRect().width
+                + parseFloat(whiteStyle.marginLeft || 0)
+                + parseFloat(whiteStyle.marginRight || 0);
+        }
+        const blackWidthProbe = getComputedStyle(document.documentElement);
+        blackKeyWidth = parseFloat(blackWidthProbe.getPropertyValue('--key-black-width')) || blackKeyWidth;
 
         WHITE_KEYS_ORDER.forEach((keyChar, idx) => {
             const baseMidi = WHITE_KEY_MAP[keyChar];
@@ -146,21 +209,22 @@
 
             if (blackKeyChar && idx < WHITE_KEYS_ORDER.length - 1) {
                 const transposedMidi = blackMidi + transpose;
-                const noteIdx = ((transposedMidi % 12) + 12) % 12;
-                const octave = Math.floor(transposedMidi / 12) - 1;
-                const noteName = NOTE_NAMES[noteIdx];
+                const { name, octave } = midiToNoteName(transposedMidi);
 
                 const el = document.createElement('div');
                 el.className = 'key key-black';
                 el.dataset.midi = String(blackMidi);
                 el.id = `key-${blackMidi}`;
+                el.setAttribute('role', 'button');
+                el.tabIndex = -1;
+                el.setAttribute('aria-label', `${name}${octave}`);
 
-                const leftPos = (idx + 1) * whiteKeyWidth - 10;
+                const leftPos = (idx + 1) * whiteKeyPitch - (blackKeyWidth / 2);
                 el.style.left = `${leftPos}px`;
 
                 const label = document.createElement('span');
                 label.className = 'key-label';
-                label.textContent = `${noteName}${octave}`;
+                label.textContent = `${name}${octave}`;
                 el.appendChild(label);
 
                 const mapping = document.createElement('span');
@@ -170,6 +234,12 @@
 
                 addKeyEvents(el, blackMidi);
                 pianoKeysContainer.appendChild(el);
+
+                const slot = document.createElement('div');
+                slot.className = 'vis-slot vis-slot-black';
+                slot.id = `slot-${blackMidi}`;
+                slot.style.left = `${leftPos}px`;
+                visualizerTrack.appendChild(slot);
             }
         });
 
@@ -202,16 +272,55 @@
                 startNote(baseMidi);
             }
         });
+    }
 
-        el.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            initAudio();
-            startNote(baseMidi);
-        }, { passive: false });
-        el.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopNote(baseMidi);
-        });
+    // ==========================================
+    // Touch Input (with glissando support)
+    // ==========================================
+
+    function keyMidiFromPoint(x, y) {
+        const el = document.elementFromPoint(x, y);
+        const keyEl = el && el.closest ? el.closest('.key') : null;
+        if (!keyEl) return null;
+        return parseInt(keyEl.dataset.midi, 10);
+    }
+
+    function handleTouchStart(e) {
+        e.preventDefault();
+        initAudio();
+        for (const touch of e.changedTouches) {
+            const midi = keyMidiFromPoint(touch.clientX, touch.clientY);
+            if (midi !== null) {
+                activeTouches.set(touch.identifier, midi);
+                startNote(midi);
+            }
+        }
+    }
+
+    function handleTouchMove(e) {
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+            const prevMidi = activeTouches.get(touch.identifier);
+            const midi = keyMidiFromPoint(touch.clientX, touch.clientY);
+            if (midi === prevMidi) continue;
+            if (prevMidi !== undefined) stopNote(prevMidi);
+            if (midi !== null) {
+                activeTouches.set(touch.identifier, midi);
+                startNote(midi);
+            } else {
+                activeTouches.delete(touch.identifier);
+            }
+        }
+    }
+
+    function handleTouchEnd(e) {
+        for (const touch of e.changedTouches) {
+            const midi = activeTouches.get(touch.identifier);
+            if (midi !== undefined) {
+                stopNote(midi);
+                activeTouches.delete(touch.identifier);
+            }
+        }
     }
 
     // ==========================================
@@ -235,9 +344,7 @@
             createFireBurst(el);
         }
 
-        const noteIdx = ((midi % 12) + 12) % 12;
-        const octave = Math.floor(midi / 12) - 1;
-        const name = NOTE_NAMES[noteIdx];
+        const { name, octave } = midiToNoteName(midi);
         noteNameEl.textContent = name;
         noteOctaveEl.textContent = octave;
 
@@ -245,6 +352,8 @@
         noteHistory.push(displayChar);
         if (noteHistory.length > 60) noteHistory.shift();
         noteHistoryEl.textContent = noteHistory.join('');
+
+        startTrail(baseMidi, el ? el.classList.contains('key-black') : false);
     }
 
     function stopNote(baseMidi) {
@@ -264,6 +373,8 @@
         } else {
             audioEngine.stopNote(midi);
         }
+
+        releaseTrail(baseMidi);
     }
 
     function createFireBurst(el) {
@@ -276,6 +387,90 @@
         el.appendChild(burst);
         setTimeout(() => burst.remove(), 500);
     }
+
+    // ==========================================
+    // Note Trail Visualizer
+    // ==========================================
+
+    const TRAIL_SPEED = 130; // px/sec while held
+    const TRAIL_FLOAT_DURATION = 3.2; // seconds the bar drifts upward after release (must match style.css .note-trail.releasing)
+    const TRAIL_FLOAT_DISTANCE = TRAIL_SPEED * TRAIL_FLOAT_DURATION; // keeps the same speed into the float phase
+
+    function startTrail(baseMidi, isBlack) {
+        const slot = document.getElementById(`slot-${baseMidi}`);
+        if (!slot) return;
+
+        const existing = noteTrails.get(baseMidi);
+        if (existing) {
+            existing.el.remove();
+            noteTrails.delete(baseMidi);
+        }
+
+        const el = document.createElement('div');
+        el.className = 'note-trail' + (isBlack ? ' black-note' : '');
+        slot.appendChild(el);
+        noteTrails.set(baseMidi, { el, start: performance.now(), height: 0, released: false });
+
+        ensureTrailLoop();
+    }
+
+    function releaseTrail(baseMidi) {
+        const t = noteTrails.get(baseMidi);
+        if (!t || t.released) return;
+        t.released = true;
+        noteTrails.delete(baseMidi);
+
+        const el = t.el;
+        el.style.height = `${t.height}px`;
+        requestAnimationFrame(() => {
+            el.classList.add('releasing');
+            el.style.transform = `translateY(-${t.height + TRAIL_FLOAT_DISTANCE}px)`;
+            el.style.opacity = '0';
+        });
+        setTimeout(() => el.remove(), TRAIL_FLOAT_DURATION * 1000 + 100);
+    }
+
+    function clearAllTrails() {
+        noteTrails.clear();
+    }
+
+    function ensureTrailLoop() {
+        if (trailRafId !== null) return;
+        const loop = (now) => {
+            let hasActive = false;
+            for (const t of noteTrails.values()) {
+                if (t.released) continue;
+                hasActive = true;
+                t.height = ((now - t.start) / 1000) * TRAIL_SPEED;
+                t.el.style.height = `${t.height}px`;
+            }
+            trailRafId = hasActive ? requestAnimationFrame(loop) : null;
+        };
+        trailRafId = requestAnimationFrame(loop);
+    }
+
+    function setVisualizerMode(on) {
+        visualizerMode = on;
+        appEl.classList.toggle('visualizer-mode', on);
+        visualizerToggleBtn.classList.toggle('active', on);
+        visualizerToggleBtn.setAttribute('aria-pressed', String(on));
+        if (on) setHelpPopoverOpen(false);
+    }
+
+    function setHelpPopoverOpen(open) {
+        helpPopover.hidden = !open;
+        helpToggleBtn.classList.toggle('active', open);
+        helpToggleBtn.setAttribute('aria-expanded', String(open));
+    }
+
+    // Keep the visualizer track horizontally aligned with the piano when it scrolls
+    // (small screens where the keyboard is wider than the viewport). visualizer-track
+    // is centered via translateX(-50%); we adjust that offset by the piano's scroll
+    // position rather than relying on native scrolling, since the track itself never
+    // overflows its own (non-scrolling) stage container.
+    pianoBody.addEventListener('scroll', () => {
+        visualizerTrack.style.transform = `translateX(calc(-50% - ${pianoBody.scrollLeft}px))`;
+    });
 
     // ==========================================
     // Keyboard Input
@@ -295,28 +490,31 @@
             return;
         }
 
+        if (key === 'Escape') {
+            if (!helpPopover.hidden) {
+                setHelpPopoverOpen(false);
+                return;
+            }
+            setVisualizerMode(!visualizerMode);
+            return;
+        }
+
         if (key === 'Shift') return;
 
         initAudio();
 
         if (pressedPhysicalKeys.has(code)) return;
 
-        if (BLACK_KEY_MAP[key] !== undefined) {
-            e.preventDefault();
-            const baseMidi = BLACK_KEY_MAP[key];
-            pressedPhysicalKeys.set(code, baseMidi);
-            startNote(baseMidi);
-            return;
-        }
+        const whiteMidi = CODE_TO_WHITE_MIDI[code];
+        if (whiteMidi === undefined) return;
 
-        const lowerKey = key.toLowerCase();
-        if (WHITE_KEY_MAP[lowerKey] !== undefined && !e.shiftKey) {
-            e.preventDefault();
-            const baseMidi = WHITE_KEY_MAP[lowerKey];
-            pressedPhysicalKeys.set(code, baseMidi);
-            startNote(baseMidi);
-            return;
+        e.preventDefault();
+        let baseMidi = whiteMidi;
+        if (e.shiftKey && MIDI_TO_BLACK_KEY[whiteMidi + 1] !== undefined) {
+            baseMidi = whiteMidi + 1;
         }
+        pressedPhysicalKeys.set(code, baseMidi);
+        startNote(baseMidi);
     }
 
     function handleKeyUp(e) {
@@ -356,6 +554,7 @@
             audioEngine.stopNote(midi);
             const el = document.getElementById(`key-${baseMidi}`);
             if (el) el.classList.remove('active');
+            releaseTrail(baseMidi);
         }
         activeNotes.clear();
         pressedPhysicalKeys.clear();
@@ -409,6 +608,11 @@
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
 
+        pianoKeysContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+        pianoKeysContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+        pianoKeysContainer.addEventListener('touchend', handleTouchEnd);
+        pianoKeysContainer.addEventListener('touchcancel', handleTouchEnd);
+
         volumeSlider.addEventListener('input', (e) => {
             audioEngine.setVolume(parseInt(e.target.value) / 100);
         });
@@ -431,6 +635,18 @@
 
         transposeUpBtn.addEventListener('click', () => setTranspose(transpose + 1));
         transposeDownBtn.addEventListener('click', () => setTranspose(transpose - 1));
+
+        visualizerToggleBtn.addEventListener('click', () => setVisualizerMode(!visualizerMode));
+
+        helpToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setHelpPopoverOpen(helpPopover.hidden);
+        });
+        document.addEventListener('click', (e) => {
+            if (!helpPopover.hidden && !helpPopover.contains(e.target) && e.target !== helpToggleBtn) {
+                setHelpPopoverOpen(false);
+            }
+        });
 
         pianoKeysContainer.addEventListener('contextmenu', e => e.preventDefault());
 
