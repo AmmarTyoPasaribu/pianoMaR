@@ -26,8 +26,8 @@ function keyRect(key: number, kw: number) {
 function readColors() {
   const s = getComputedStyle(document.documentElement);
   return {
-    a: s.getPropertyValue("--accent").trim() || "#ff5b3a",
-    b: s.getPropertyValue("--accent-2").trim() || "#ffb648",
+    a: s.getPropertyValue("--accent").trim() || "#4fe3c1",
+    b: s.getPropertyValue("--accent-2").trim() || "#8b7bff",
   };
 }
 

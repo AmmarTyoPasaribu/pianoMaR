@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   touch: "medium",
   sustainMode: "toggle",
   labels: "both",
-  theme: "ember",
+  theme: "aurora",
   historyMode: "keys",
   bpm: 100,
   beats: 4,
@@ -71,7 +71,14 @@ export const useSettings = create<SettingsStore>()(
     }),
     {
       name: "pianomar-settings",
-      version: 1,
+      // v2: default theme became Aurora. v1 saved the old default ("ember") for everyone,
+      // so move those visitors over too.
+      version: 2,
+      migrate: (persisted, version) => {
+        const s = (persisted ?? {}) as Partial<Settings>;
+        if (version < 2 && s.theme === "ember") s.theme = "aurora";
+        return s as SettingsStore;
+      },
       // Hydrated manually after mount so server and client render the same markup.
       skipHydration: true,
       partialize: ({ set: _s, reset: _r, ...rest }) => rest,

@@ -2,7 +2,6 @@
    PianoMaR — design tokens
    ========================================================================== */
 
-:root,
 :root[data-theme="ember"] {
   color-scheme: dark;
   --bg: #0d0b0a;
@@ -53,6 +52,8 @@
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -12px rgba(0, 0, 0, 0.7);
 }
 
+/* Aurora is the default theme */
+:root,
 :root[data-theme="aurora"] {
   color-scheme: dark;
   --bg: #070a12;

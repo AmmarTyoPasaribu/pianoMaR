@@ -25,15 +25,16 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0d0b0a",
+  themeColor: "#070a12",
 };
 
 // Applies the saved theme before first paint so there's no flash of the default theme.
-const themeScript = `try{var s=JSON.parse(localStorage.getItem("pianomar-settings")||"{}");var t=s&&s.state&&s.state.theme;if(t)document.documentElement.dataset.theme=t;}catch(e){}`;
+// Mirrors the v1 -> v2 migration in lib/store.ts (old default "ember" becomes "aurora").
+const themeScript = `try{var s=JSON.parse(localStorage.getItem("pianomar-settings")||"{}");var t=s&&s.state&&s.state.theme;if(t==="ember"&&!(s.version>=2))t="aurora";if(t)document.documentElement.dataset.theme=t;}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="ember" className={`${inter.variable} ${outfit.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="aurora" className={`${inter.variable} ${outfit.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
